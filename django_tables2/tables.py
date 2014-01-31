@@ -173,7 +173,7 @@ class DeclarativeColumnsMetaclass(type):
         if opts.model:
             extra = SortedDict()
             # honor Table.Meta.fields, fallback to model._meta.fields
-            if opts.fields:
+            if opts.fields is not None:
                 # Each item in opts.fields is the name of a model field or a
                 # normal attribute on the model
                 for field_name in opts.fields:
@@ -232,7 +232,7 @@ class TableOptions(object):
         self.attrs = AttributeDict(getattr(options, "attrs", {}))
         self.default = getattr(options, "default", "—")
         self.empty_text = getattr(options, "empty_text", None)
-        self.fields = getattr(options, "fields", ())
+        self.fields = getattr(options, "fields", None)
         self.exclude = getattr(options, "exclude", ())
         order_by = getattr(options, "order_by", None)
         if isinstance(order_by, six.string_types):
