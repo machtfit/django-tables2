@@ -1,6 +1,7 @@
 # coding: utf-8
 from __future__ import absolute_import, unicode_literals
 from django.core.handlers.wsgi import WSGIRequest
+from django.db.models.manager import BaseManager
 from django.utils.html import escape
 from django.utils.safestring import mark_safe
 from django.test.client import FakePayload
@@ -377,7 +378,8 @@ class Accessor(str):
                     if safe and getattr(current, 'alters_data', False):
                         raise ValueError('refusing to call %s() because `.alters_data = True`'
                                          % repr(current))
-                    current = current()
+                    if not isinstance(current, BaseManager):
+                        current = current()
                 # important that we break in None case, or a relationship
                 # spanning across a null-key will raise an exception in the
                 # next iteration, instead of defaulting.
