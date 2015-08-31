@@ -12,4 +12,4 @@ except ImportError:
     pass
 
 
-__version__ = "0.15.99-machtfit-3"
+__version__ = "0.15.99-machtfit-4"
