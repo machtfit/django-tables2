@@ -1,12 +1,16 @@
 # coding: utf-8
 from __future__ import absolute_import, unicode_literals
+from collections import OrderedDict
+from itertools import islice
+import warnings
+
 from django.db.models.fields import FieldDoesNotExist
-from django.utils.datastructures import SortedDict
+from django import VERSION as django_version
+import six
+
 from django_tables2.templatetags.django_tables2 import title
 from django_tables2.utils import A, AttributeDict, OrderBy, OrderByTuple
-from itertools import islice
-import six
-import warnings
+from ..utils import python_2_unicode_compatible
 
 
 class Library(object):
@@ -125,8 +129,6 @@ class Column(object):  # pylint: disable=R0902
 
     .. attribute:: localize
 
-        This attribute doesn't work in Django 1.2
-
         *   If `True`, cells of this column will be localized in the HTML output
             by the localize filter.
 
@@ -242,9 +244,14 @@ class Column(object):  # pylint: disable=R0902
         # Since this method is inherited by every subclass, only provide a
         # column if this class was asked directly.
         if cls is Column:
-            return cls(verbose_name=field.verbose_name)
+            if hasattr(field, "get_related_field"):
+                verbose_name = field.get_related_field().verbose_name
+            else:
+                verbose_name = field.verbose_name
+            return cls(verbose_name=verbose_name)
 
 
+@python_2_unicode_compatible
 class BoundColumn(object):
     """
     A *run-time* version of `.Column`. The difference between
@@ -274,7 +281,7 @@ class BoundColumn(object):
         self.column = column
         self.name = name
 
-    def __unicode__(self):
+    def __str__(self):
         return six.text_type(self.header)
 
     @property
@@ -453,14 +460,19 @@ class BoundColumn(object):
         # in anything useful.
         name = title(self.name.replace('_', ' '))
 
-        # Try to use a tmodel field's verbose_name
-        if hasattr(self.table.data, 'queryset'):
+        # Try to use a model field's verbose_name
+        if hasattr(self.table.data, 'queryset') and hasattr(self.table.data.queryset, 'model'):
             model = self.table.data.queryset.model
             parts = self.accessor.split('.')
             field = None
             for part in parts:
+
                 try:
-                    field = model._meta.get_field(part)
+                    if django_version < (1, 8, 0):
+                        field, _, _, _ = model._meta.get_field_by_name(part)
+                    else:
+                        field = model._meta.get_field(part)
+
                 except FieldDoesNotExist:
                     break
                 if hasattr(field, 'rel') and hasattr(field.rel, 'to'):
@@ -468,7 +480,10 @@ class BoundColumn(object):
                     continue
                 break
             if field:
-                name = field.verbose_name
+                if hasattr(field, 'field'):
+                    name = field.field.verbose_name
+                else:
+                    name = field.verbose_name
         return name
 
     @property
@@ -498,7 +513,7 @@ class BoundColumns(object):
     A `BoundColumns` object is a container for holding `BoundColumn` objects.
     It provides methods that make accessing columns easier than if they were
     stored in a `list` or `dict`. `Columns` has a similar API to a `dict` (it
-    actually uses a `~django.utils.datastructures.SortedDict` interally).
+    actually uses a `~collections.OrderedDict` interally).
 
     At the moment you'll only come across this class when you access a
     `.Table.columns` property.
@@ -508,7 +523,7 @@ class BoundColumns(object):
     """
     def __init__(self, table):
         self.table = table
-        self.columns = SortedDict()
+        self.columns = OrderedDict()
         for name, column in six.iteritems(table.base_columns):
             self.columns[name] = bc = BoundColumn(table, column, name)
             bc.render = getattr(table, 'render_' + name, column.render)

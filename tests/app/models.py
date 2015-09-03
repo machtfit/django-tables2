@@ -2,8 +2,7 @@
 from __future__ import unicode_literals
 from django.db import models
 from django.utils.safestring import mark_safe
-from django.utils.translation import ugettext_lazy
-from django.utils.translation import ugettext
+from django.utils.translation import ugettext, ugettext_lazy
 import six
 
 
@@ -53,6 +52,11 @@ class Region(models.Model):
 
     def __unicode__(self):
         return self.name
+
+
+class PersonInformation(models.Model):
+    person = models.ForeignKey(
+        Person, related_name='info_list', verbose_name='Information')
 
 
 # -- haystack -----------------------------------------------------------------

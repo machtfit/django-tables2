@@ -22,9 +22,6 @@ setup(
 
     install_requires=['Django >=1.2', 'six'],
 
-    test_loader='tests:loader',
-    test_suite='tests.everything',
-
     classifiers=[
         'Environment :: Web Environment',
         'Framework :: Django',
@@ -32,6 +29,11 @@ setup(
         'License :: OSI Approved :: BSD License',
         'Operating System :: OS Independent',
         'Programming Language :: Python',
+        'Programming Language :: Python :: 2',
+        'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3.3',
+        'Programming Language :: Python :: 3.4',
         'Topic :: Internet :: WWW/HTTP',
         'Topic :: Software Development :: Libraries',
     ],
