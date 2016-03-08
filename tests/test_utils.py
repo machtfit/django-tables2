@@ -1,10 +1,11 @@
 # coding: utf-8
-# from attest import assert_hook, raises, Tests
-import six
 import pytest
+import six
+from django.db import models
 
-from django_tables2.utils import (Accessor, AttributeDict, computed_values,
-                                  OrderByTuple, OrderBy, segment)
+from django_tables2.utils import (Accessor, AttributeDict, OrderBy,
+                                  OrderByTuple, Sequence, computed_values,
+                                  segment)
 
 
 def test_orderbytuple():
@@ -23,8 +24,8 @@ def test_orderbytuple():
     sentinel = object()
     assert obt.get('b', sentinel) is obt['b']  # keying
     assert obt.get('-', sentinel) is sentinel
-    assert obt.get(0,   sentinel) is obt['a']  # indexing
-    assert obt.get(3,   sentinel) is sentinel
+    assert obt.get(0, sentinel) is obt['a']  # indexing
+    assert obt.get(3, sentinel) is sentinel
 
     # .opposite
     assert OrderByTuple(('a', '-b', 'c')).opposite == ('-a', 'b', '-c')
@@ -71,15 +72,15 @@ def test_orderby():
     assert 'a' == a
     assert 'a' == a.bare
     assert '-a' == a.opposite
-    assert True == a.is_ascending
-    assert False == a.is_descending
+    assert True is a.is_ascending
+    assert False is a.is_descending
 
     b = OrderBy('-b')
     assert '-b' == b
     assert 'b' == b.bare
     assert 'b' == b.opposite
-    assert True == b.is_descending
-    assert False == b.is_ascending
+    assert True is b.is_descending
+    assert False is b.is_ascending
 
 
 def test_accessor():
@@ -115,22 +116,44 @@ def test_accessor_wont_honors_alters_data():
 
 def test_accessor_can_be_quiet():
     foo = {}
-    assert Accessor("bar").resolve(foo, quiet=True) is None
+    assert Accessor('bar').resolve(foo, quiet=True) is None
+
+
+class AccessorTestModel(models.Model):
+    foo = models.CharField(max_length=20)
+
+    class Meta:
+        app_label = 'django_tables2_test'
+
+
+def test_accessor_can_return_field():
+    context = AccessorTestModel(foo='bar')
+    assert type(Accessor('foo').get_field(context)) == models.CharField
+
+
+def test_accessor_returns_None_when_doesnt_exist():
+    context = AccessorTestModel(foo='bar')
+    assert Accessor('bar').get_field(context) is None
+
+
+def test_accessor_returns_None_if_not_a_model():
+    context = {'bar': 234}
+    assert Accessor('bar').get_field(context) is None
 
 
 def test_attribute_dict_handles_escaping():
-    x = AttributeDict({"x": '"\'x&'})
+    x = AttributeDict({'x': '"\'x&'})
     assert x.as_html() == 'x="&quot;&#39;x&amp;"'
 
 
 def test_compute_values_supports_shallow_structures():
-    x = computed_values({"foo": lambda: "bar"})
-    assert x == {"foo": "bar"}
+    x = computed_values({'foo': lambda: 'bar'})
+    assert x == {'foo': 'bar'}
 
 
-def test_compute_values_supports_shallow_structures():
-    x = computed_values({"foo": lambda: {"bar": lambda: "baz"}})
-    assert x == {"foo": {"bar": "baz"}}
+def test_compute_values_supports_nested_structures():
+    x = computed_values({'foo': lambda: {'bar': lambda: 'baz'}})
+    assert x == {'foo': {'bar': 'baz'}}
 
 
 def test_segment_should_return_all_candidates():
@@ -142,3 +165,10 @@ def test_segment_should_return_all_candidates():
         ("x", "-y"),
         ("x", "z"),
     }
+
+
+def test_sequence_multiple_ellipsis():
+    sequence = Sequence(['foo', '...', 'bar', '...'])
+
+    with pytest.raises(ValueError):
+        sequence.expand(['foo'])

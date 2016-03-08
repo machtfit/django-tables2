@@ -1,12 +1,14 @@
 # coding: utf-8
-import six
 import pytest
+import six
 
-from .app.models import Person, Occupation
 import django_tables2 as tables
 
+from .app.models import Occupation, Person, PersonProxy
+from .utils import build_request
 
 pytestmark = pytest.mark.django_db
+request = build_request('/')
 
 
 class PersonTable(tables.Table):
@@ -18,7 +20,7 @@ class PersonTable(tables.Table):
 def test_boundrows_iteration():
     occupation = Occupation.objects.create(name='Programmer')
     Person.objects.create(first_name='Bradley', last_name='Ayers', occupation=occupation)
-    Person.objects.create(first_name='Chris',   last_name='Doble', occupation=occupation)
+    Person.objects.create(first_name='Chris', last_name='Doble', occupation=occupation)
 
     table = PersonTable(Person.objects.all())
     records = [row.record for row in table.rows]
@@ -35,14 +37,16 @@ def test_model_table():
     class OccupationTable(tables.Table):
         class Meta:
             model = Occupation
-    assert ["id", "name", "region"] == list(OccupationTable.base_columns.keys())
+
+    assert ['id', 'name', 'region', 'boolean'] == list(OccupationTable.base_columns.keys())
 
     class OccupationTable2(tables.Table):
         extra = tables.Column()
 
         class Meta:
             model = Occupation
-    assert ["id", "name", "region", "extra"] == list(OccupationTable2.base_columns.keys())
+
+    assert ['id', 'name', 'region', 'boolean', 'extra'] == list(OccupationTable2.base_columns.keys())
 
     # be aware here, we already have *models* variable, but we're importing
     # over the top
@@ -50,13 +54,16 @@ def test_model_table():
 
     class ComplexModel(models.Model):
         char = models.CharField(max_length=200)
-        fk = models.ForeignKey("self")
-        m2m = models.ManyToManyField("self")
+        fk = models.ForeignKey('self')
+        m2m = models.ManyToManyField('self')
+
+        class Meta:
+            app_label = 'django_tables2_test'
 
     class ComplexTable(tables.Table):
         class Meta:
             model = ComplexModel
-    assert ["id", "char", "fk"] == list(ComplexTable.base_columns.keys())
+    assert ['id', 'char', 'fk'] == list(ComplexTable.base_columns.keys())
 
 
 def test_mixins():
@@ -68,7 +75,7 @@ def test_mixins():
 
         class Meta:
             model = Occupation
-    assert ["extra", "id", "name", "region", "extra2"] == list(OccupationTable.base_columns.keys())
+    assert ['extra', 'id', 'name', 'region', 'boolean', 'extra2'] == list(OccupationTable.base_columns.keys())
 
 
 def test_column_verbose_name():
@@ -159,6 +166,9 @@ def test_field_choices_used_to_translated_value():
         name = models.CharField(max_length=200)
         language = models.CharField(max_length=200, choices=LANGUAGES)
 
+        class Meta:
+            app_label = 'django_tables2_test'
+
         def __unicode__(self):
             return self.name
 
@@ -182,7 +192,7 @@ def test_column_mapped_to_nonexistant_field():
         missing = tables.Column()
 
     table = FaultyPersonTable(Person.objects.all())
-    table.as_html()  # the bug would cause this to raise FieldDoesNotExist
+    table.as_html(request)  # the bug would cause this to raise FieldDoesNotExist
 
 
 def test_should_support_rendering_multiple_times():
@@ -191,7 +201,7 @@ def test_should_support_rendering_multiple_times():
 
     # test queryset data
     table = MultiRenderTable(Person.objects.all())
-    assert table.as_html() == table.as_html()
+    assert table.as_html(request) == table.as_html(request)
 
 
 def test_ordering():
@@ -199,7 +209,16 @@ def test_ordering():
         name = tables.Column(order_by=("first_name", "last_name"))
 
     table = SimpleTable(Person.objects.all(), order_by="name")
-    assert table.as_html()
+    assert table.as_html(request)
+
+
+def test_default_order():
+    # 204
+    table = PersonTable(PersonProxy.objects.all())
+    Person.objects.create(first_name='Foo', last_name='Bar')
+    Person.objects.create(first_name='Bradley', last_name='Ayers')
+    table.data.order_by([])
+    assert list(table.rows[0])[1] == 'Ayers'
 
 
 def test_fields_should_implicitly_set_sequence():
@@ -224,13 +243,24 @@ def test_model_properties_should_be_useable_for_columns():
     assert list(table.rows[0]) == ['Bradley Ayers', 'Bradley']
 
 
+def test_meta_fields_may_be_list():
+    class PersonTable(tables.Table):
+        class Meta:
+            model = Person
+            fields = ['name', 'first_name']
+
+    Person.objects.create(first_name='Bradley', last_name='Ayers')
+    table = PersonTable(Person.objects.all())
+    assert list(table.rows[0]) == ['Bradley Ayers', 'Bradley']
+
+
 def test_column_with_delete_accessor_shouldnt_delete_records():
     class PersonTable(tables.Table):
         delete = tables.Column()
 
     Person.objects.create(first_name='Bradley', last_name='Ayers')
     table = PersonTable(Person.objects.all())
-    table.as_html()
+    table.as_html(request)
     assert Person.objects.get(first_name='Bradley')
 
 
@@ -241,7 +271,9 @@ def test_order_by_derived_from_queryset():
         name = tables.Column(order_by=("first_name", "last_name"))
         occupation = tables.Column(order_by=("occupation__name",))
 
-    assert PersonTable(queryset.order_by("first_name", "last_name", "-occupation__name")).order_by == ("name", "-occupation")
+    assert PersonTable(
+        queryset.order_by("first_name", "last_name", "-occupation__name")
+    ).order_by == ("name", "-occupation")
 
     class PersonTable(PersonTable):
         class Meta:
@@ -291,8 +323,14 @@ def test_unicode_field_names():
     assert table.rows[0]["first_name"] == "Brad"
 
 
-@models.test
-def fields_empty_list_means_no_fields():
+def test_foreign_key():
+    class PersonTable(tables.Table):
+        class Meta:
+            model = Person
+            fields = ('foreign_key', )
+
+
+def test_fields_empty_list_means_no_fields():
     class Table(tables.Table):
         class Meta:
             model = Person

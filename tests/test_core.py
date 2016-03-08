@@ -1,14 +1,20 @@
 # coding: utf-8
 """Test the core table functionality."""
 from __future__ import absolute_import, unicode_literals
+
 import copy
+import itertools
+
+import pytest
+import six
 from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
+
 import django_tables2 as tables
 from django_tables2.tables import DeclarativeColumnsMetaclass
-import six
-import itertools
-import pytest
-from .utils import warns
+
+from .utils import build_request
+
+request = build_request('/')
 
 
 class UnorderedTable(tables.Table):
@@ -168,28 +174,29 @@ def test_should_support_haystack_data_source():
         first_name = tables.Column()
 
     table = PersonTable(SearchQuerySet().all())
-    table.as_html()
+    table.as_html(request)
 
 
 def test_data_validation():
     with pytest.raises(ValueError):
         table = OrderedTable(None)
-    
+
     class Bad:
         def __len__(self):
             pass
-      
+
     with pytest.raises(ValueError):
         table = OrderedTable(Bad())
 
     class Ok:
         def __len__(self):
             return 1
+
         def __getitem__(self, pos):
             if pos != 0:
                 raise IndexError()
             return {'a': 1}
-    
+
     table = OrderedTable(Ok())
     assert len(table.rows) == 1
 
@@ -199,8 +206,8 @@ def test_ordering():
     assert ('alpha', ) == OrderedTable([], order_by=None).order_by == OrderedTable([]).order_by
 
     # values of order_by are wrapped in tuples before being returned
-    assert OrderedTable([], order_by='alpha').order_by   == ('alpha', )
-    assert OrderedTable([], order_by=('beta',)).order_by == ('beta', )
+    assert OrderedTable([], order_by='alpha').order_by == ('alpha', )
+    assert OrderedTable([], order_by=('beta', )).order_by == ('beta', )
 
     table = OrderedTable([])
     table.order_by = []
@@ -221,7 +228,7 @@ def test_ordering():
 
     table = OrderedTable([])
     table.order_by = 'alpha'
-    assert ('alpha', ) == OrderedTable([], order_by='alpha').order_by  == table.order_by
+    assert ('alpha', ) == OrderedTable([], order_by='alpha').order_by == table.order_by
 
     # let's check the data
     table = OrderedTable(MEMORY_DATA, order_by='beta')
@@ -262,20 +269,6 @@ def test_ordering():
     table = TestTable3([], orderable=True, order_by='b')
     assert table.order_by == ('b', )
 
-    with warns(DeprecationWarning) as captured:
-        tables.Column(sortable=True)
-        tables.Column(sortable=False)
-
-        class TestTable4(tables.Table):
-            class Meta:
-                sortable = True
-
-        class TestTable4(tables.Table):
-            class Meta:
-                sortable = False
-
-    assert len(captured) == 4
-
 
 def test_ordering_different_types():
     from datetime import datetime
@@ -295,17 +288,16 @@ def test_ordering_different_types():
     else:
         assert 1 == table.rows[0]['i']
 
-
     table = OrderedTable(data, order_by='beta')
     assert [] == table.rows[0]['beta']
 
 
 def test_multi_column_ordering():
-    brad   = {"first_name": "Bradley", "last_name": "Ayers"}
-    brad2  = {"first_name": "Bradley", "last_name": "Fake"}
-    chris  = {"first_name": "Chris",   "last_name": "Doble"}
-    davina = {"first_name": "Davina",  "last_name": "Adisusila"}
-    ross   = {"first_name": "Ross",    "last_name": "Ayers"}
+    brad = {"first_name": "Bradley", "last_name": "Ayers"}
+    brad2 = {"first_name": "Bradley", "last_name": "Fake"}
+    chris = {"first_name": "Chris", "last_name": "Doble"}
+    davina = {"first_name": "Davina", "last_name": "Adisusila"}
+    ross = {"first_name": "Ross", "last_name": "Ayers"}
 
     people = [brad, brad2, chris, davina, ross]
 
@@ -381,6 +373,7 @@ def test_exclude_columns():
     # Inheritence -- exclude in child
     class ExcludeTable(UnorderedTable):
         added = tables.Column()
+
         class Meta:
             exclude = ("beta", )
     table = ExcludeTable([])
@@ -442,7 +435,7 @@ def test_pagination_shouldnt_prevent_multiple_rendering():
     table = SimpleTable([{'name': 'brad'}])
     table.paginate()
 
-    assert table.as_html() == table.as_html()
+    assert table.as_html(request) == table.as_html(request)
 
 
 def test_empty_text():
@@ -560,7 +553,7 @@ def test_template_in_meta_class_declaration_should_be_honored():
 
     table = MetaDeclarationSpecifiedTemplateTable([])
     assert table.template == "dummy.html"
-    assert table.as_html() == "dummy template contents\n"
+    assert table.as_html(request) == "dummy template contents\n"
 
 
 def test_should_support_rendering_multiple_times():
@@ -569,7 +562,7 @@ def test_should_support_rendering_multiple_times():
 
     # test list data
     table = MultiRenderTable([{'name': 'brad'}])
-    assert table.as_html() == table.as_html()
+    assert table.as_html(request) == table.as_html(request)
 
 
 def test_column_defaults_are_honored():

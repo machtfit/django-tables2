@@ -1,10 +1,10 @@
 # coding: utf-8
-# pylint: disable=R0912,E0102
 from __future__ import unicode_literals
 
 from django.template import Context
 
 import django_tables2 as tables
+import pytest
 
 
 def test_should_handle_context_on_table():
@@ -34,3 +34,17 @@ def test_should_support_value():
 
     table = Table([{"foo": "bar"}])
     assert table.rows[0]["foo"] == "value=bar"
+
+
+def test_should_support_column():
+    class Table(tables.Table):
+        tcol = tables.TemplateColumn("column={{ column.name }}")
+
+    table = Table([{'foo': 'bar'}])
+    assert table.rows[0]['tcol'] == 'column=tcol'
+
+
+def test_should_raise_when_called_without_template():
+    with pytest.raises(ValueError):
+        class Table(tables.Table):
+            col = tables.TemplateColumn()

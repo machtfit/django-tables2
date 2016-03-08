@@ -1,9 +1,13 @@
 Tutorial
 ========
 
+.. note::
+    For this tutorial, we'll assume you use Django version 1.8.0 or greater. For
+    Django 1.7, refer to the `Django 1.7 documentation <https://docs.djangoproject.com/en/1.7/ref/templates/api/#django-core-context-processors-request>`_.
+
 1. ``pip install django-tables2``
 2. Add ``'django_tables2'`` to ``INSTALLED_APPS``
-3. Add ``'django.core.context_processors.request'`` to ``TEMPLATE_CONTEXT_PROCESSORS``
+3. Add ``'django.core.context_processors.request'`` to the ``context_preprocessors`` in your template setting ``OPTIONS``.
 
 We're going to run through creating a tutorial app. Let's start with a simple model::
 
@@ -84,14 +88,7 @@ table.
 
     {% render_table table %}
 
-.. note::
-
-    ``{% render_table %}`` works best when it's used in a template that
-    contains the current request in the context as ``request``. The easiest way
-    to enable this, is to ensure that the ``TEMPLATE_CONTEXT_PROCESSORS``
-    setting contains ``"django.core.context_processors.request"``.
-
 At this point you haven't actually customised anything, you've merely added the
 boilerplate code that ``{% render_table %}`` does for you when given a
-queryset. The remaining sections in this document describe how to change
+``QuerySet``. The remaining sections in this document describe how to change
 various aspects of the table.

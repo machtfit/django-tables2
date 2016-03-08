@@ -1,16 +1,13 @@
 # coding: utf-8
 from __future__ import absolute_import, unicode_literals
+
 from collections import OrderedDict
 from itertools import islice
-import warnings
 
-from django.db.models.fields import FieldDoesNotExist
-from django import VERSION as django_version
 import six
 
 from django_tables2.templatetags.django_tables2 import title
-from django_tables2.utils import A, AttributeDict, OrderBy, OrderByTuple
-from ..utils import python_2_unicode_compatible
+from django_tables2.utils import Accessor, AttributeDict, OrderBy, OrderByTuple
 
 
 class Library(object):
@@ -50,7 +47,7 @@ library = Library()
 
 
 @library.register
-class Column(object):  # pylint: disable=R0902
+class Column(object):
     """
     Represents a single column of a table.
 
@@ -146,23 +143,17 @@ class Column(object):  # pylint: disable=R0902
 
     def __init__(self, verbose_name=None, accessor=None, default=None,
                  visible=True, orderable=None, attrs=None, order_by=None,
-                 sortable=None, empty_values=None, localize=None):
+                 empty_values=None, localize=None):
         if not (accessor is None or isinstance(accessor, six.string_types) or
                 callable(accessor)):
             raise TypeError('accessor must be a string or callable, not %s' %
                             type(accessor).__name__)
         if callable(accessor) and default is not None:
             raise TypeError('accessor must be string when default is used, not callable')
-        self.accessor = A(accessor) if accessor else None
+        self.accessor = Accessor(accessor) if accessor else None
         self._default = default
         self.verbose_name = verbose_name
         self.visible = visible
-        if sortable is not None:
-            warnings.warn('`sortable` is deprecated, use `orderable` instead.',
-                          DeprecationWarning)
-            # if orderable hasn't been specified, we'll use sortable's value
-            if orderable is None:
-                orderable = sortable
         self.orderable = orderable
         self.attrs = attrs or {}
         # massage order_by into an OrderByTuple or None
@@ -217,15 +208,6 @@ class Column(object):  # pylint: disable=R0902
         """
         return value
 
-    @property
-    def sortable(self):
-        """
-        *deprecated* -- use `.orderable` instead.
-        """
-        warnings.warn('`sortable` is deprecated, use `orderable` instead.',
-                      DeprecationWarning)
-        return self.orderable
-
     @classmethod
     def from_field(cls, field):
         """
@@ -247,11 +229,11 @@ class Column(object):  # pylint: disable=R0902
             if hasattr(field, "get_related_field"):
                 verbose_name = field.get_related_field().verbose_name
             else:
-                verbose_name = field.verbose_name
+                verbose_name = getattr(field, 'verbose_name', field.name)
             return cls(verbose_name=verbose_name)
 
 
-@python_2_unicode_compatible
+@six.python_2_unicode_compatible
 class BoundColumn(object):
     """
     A *run-time* version of `.Column`. The difference between
@@ -290,7 +272,7 @@ class BoundColumn(object):
         Returns the string used to access data for this column out of the data
         source.
         """
-        return self.column.accessor or A(self.name)
+        return self.column.accessor or Accessor(self.name)
 
     @property
     def attrs(self):
@@ -306,24 +288,25 @@ class BoundColumn(object):
 
         # Find the relevant th attributes (fall back to cell if th isn't
         # explicitly specified).
-        attrs["td"] = td = AttributeDict(attrs.get('td', attrs.get('cell', {})))
-        attrs["th"] = th = AttributeDict(attrs.get("th", attrs.get("cell", {})))
+        attrs['th'] = AttributeDict(attrs.get('th', attrs.get('cell', {})))
+        attrs['td'] = AttributeDict(attrs.get('td', attrs.get('cell', {})))
+
         # make set of existing classes.
-        th_class = set((c for c in th.get("class", "").split(" ") if c))  # pylint: disable=C0103
-        td_class = set((c for c in td.get("class", "").split(" ") if c))  # pylint: disable=C0103
+        th_class = set((c for c in attrs['th'].get('class', '').split(' ') if c))
+        td_class = set((c for c in attrs['td'].get('class', '').split(' ') if c))
+
         # add classes for ordering
         if self.orderable:
-            th_class.add("orderable")
-            th_class.add("sortable")  # backwards compatible
+            th_class.add('orderable')
         if self.is_ordered:
-            th_class.add("desc" if self.order_by_alias.is_descending else "asc")
+            th_class.add('desc' if self.order_by_alias.is_descending else 'asc')
+
         # Always add the column name as a class
         th_class.add(self.name)
         td_class.add(self.name)
-        if th_class:
-            th['class'] = " ".join(sorted(th_class))
-        if td_class:
-            td['class'] = " ".join(sorted(td_class))
+
+        attrs['th']['class'] = ' '.join(sorted(th_class))
+        attrs['td']['class'] = ' '.join(sorted(td_class))
         return attrs
 
     @property
@@ -423,15 +406,6 @@ class BoundColumn(object):
         return self.name in (self.table.order_by or ())
 
     @property
-    def sortable(self):
-        """
-        *deprecated* -- use `orderable` instead.
-        """
-        warnings.warn('`%s.sortable` is deprecated, use `orderable`'
-                      % type(self).__name__, DeprecationWarning)
-        return self.orderable
-
-    @property
     def orderable(self):
         """
         Return a `bool` depending on whether this column supports ordering.
@@ -453,7 +427,7 @@ class BoundColumn(object):
         person.upper should stop at person]).
         """
         # Favor an explicit defined verbose_name
-        if self.column.verbose_name:
+        if self.column.verbose_name is not None:
             return self.column.verbose_name
 
         # This is our reasonable fallback, should the next section not result
@@ -463,27 +437,12 @@ class BoundColumn(object):
         # Try to use a model field's verbose_name
         if hasattr(self.table.data, 'queryset') and hasattr(self.table.data.queryset, 'model'):
             model = self.table.data.queryset.model
-            parts = self.accessor.split('.')
-            field = None
-            for part in parts:
-
-                try:
-                    if django_version < (1, 8, 0):
-                        field, _, _, _ = model._meta.get_field_by_name(part)
-                    else:
-                        field = model._meta.get_field(part)
-
-                except FieldDoesNotExist:
-                    break
-                if hasattr(field, 'rel') and hasattr(field.rel, 'to'):
-                    model = field.rel.to
-                    continue
-                break
+            field = Accessor(self.accessor).get_field(model)
             if field:
                 if hasattr(field, 'field'):
                     name = field.field.verbose_name
                 else:
-                    name = field.verbose_name
+                    name = getattr(field, 'verbose_name', field.name)
         return name
 
     @property
@@ -565,24 +524,14 @@ class BoundColumns(object):
         Same as `BoundColumns.all` but only returns orderable columns.
 
         This is useful in templates, where iterating over the full
-        set and checking ``{% if column.sortable %}`` can be problematic in
+        set and checking ``{% if column.ordarable %}`` can be problematic in
         conjunction with e.g. ``{{ forloop.last }}`` (the last column might not
         be the actual last that is rendered).
         """
         return (x for x in self.iterall() if x.orderable)
 
-    def itersortable(self):
-        warnings.warn('`itersortable` is deprecated, use `iterorderable` instead.',
-                      DeprecationWarning)
-        return self.iterorderable()
-
     def orderable(self):
         return list(self.iterorderable())
-
-    def sortable(self):
-        warnings.warn("`sortable` is deprecated, use `orderable` instead.",
-                      DeprecationWarning)
-        return self.orderable
 
     def itervisible(self):
         """
@@ -644,5 +593,5 @@ class BoundColumns(object):
             raise KeyError("Column with name '%s' does not exist; "
                            "choices are: %s" % (index, self.names()))
         else:
-            raise TypeError('row indices must be integers or str, not %s'
+            raise TypeError('Column indices must be integers or str, not %s'
                             % type(index).__name__)

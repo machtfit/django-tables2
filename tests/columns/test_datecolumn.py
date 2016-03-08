@@ -1,13 +1,15 @@
 # coding: utf-8
 # pylint: disable=R0912,E0102
 from __future__ import unicode_literals
+
 from datetime import date
 
 from django.db import models
 
 import django_tables2 as tables
 
-# Format string: https://docs.djangoproject.com/en/1.4/ref/templates/builtins/#date
+
+# Format string: https://docs.djangoproject.com/en/stable/ref/templates/builtins/#date
 # D -- Day of the week, textual, 3 letters  -- 'Fri'
 # b -- Month, textual, 3 letters, lowercase -- 'jan'
 # Y -- Year, 4 digits.                      -- '1999'
@@ -58,6 +60,9 @@ def test_should_handle_short_format(settings):
 def test_should_be_used_for_datefields():
     class DateModel(models.Model):
         field = models.DateField()
+
+        class Meta:
+            app_label = 'django_tables2_test'
 
     class Table(tables.Table):
         class Meta:

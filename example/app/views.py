@@ -1,8 +1,13 @@
 # coding: utf-8
+from random import choice
+
 from django.shortcuts import render
-from django_tables2   import RequestConfig, SingleTableView
-from .tables import CountryTable, ThemedCountryTable
+from django.utils.lorem_ipsum import words
+
+from django_tables2 import RequestConfig, SingleTableView
+
 from .models import Country, Person
+from .tables import BootstrapTable, CountryTable, ThemedCountryTable
 
 
 def multiple(request):
@@ -30,6 +35,24 @@ def multiple(request):
         'example3': example3,
         'example4': example4,
         'example5': example5,
+    })
+
+
+def bootstrap(request):
+    '''Demonstrate the use of the bootstrap template'''
+    # create some fake data to make sure we need to paginate
+    if Person.objects.all().count() < 50:
+        countries = list(Country.objects.all()) + [None]
+        Person.objects.bulk_create([
+            Person(name=words(3, common=False), country=choice(countries))
+            for i in range(50)
+        ])
+
+    table = BootstrapTable(Person.objects.all())
+    RequestConfig(request, paginate={"per_page": 10}).configure(table)
+
+    return render(request, 'bootstrap_template.html', {
+        'table': table
     })
 
 

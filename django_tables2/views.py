@@ -1,7 +1,9 @@
 # coding: utf-8
 from __future__ import unicode_literals
+
 from django.core.exceptions import ImproperlyConfigured
 from django.views.generic.list import ListView
+
 from .config import RequestConfig
 
 
@@ -39,7 +41,8 @@ class SingleTableMixin(object):
         options = {}
         table_class = self.get_table_class()
         table = table_class(self.get_table_data(), **kwargs)
-        paginate = self.get_table_pagination()  # pylint: disable=E1102
+
+        paginate = self.get_table_pagination()
         if paginate is not None:
             options['paginate'] = paginate
         RequestConfig(self.request, **options).configure(table)
@@ -65,13 +68,20 @@ class SingleTableMixin(object):
         """
         Return the table data that should be used to populate the rows.
         """
-        if self.table_data:
+        if self.table_data is not None:
             return self.table_data
-        elif hasattr(self, "get_queryset"):
+        elif hasattr(self, 'object_list'):
+            return self.object_list
+
+        # it seems this is never going to happen because django wil raise
+        # ImproperlyConfigured if no model is defined and
+        # SingleTableMixin.get_table_class will raise if no table_data was specified...
+        # TODO: consider removing
+        elif hasattr(self, 'get_queryset'):  # pragma: nocover
             return self.get_queryset()
         raise ImproperlyConfigured("Table data was not specified. Define "
                                    "%(cls)s.table_data"
-                                   % {"cls": type(self).__name__})
+                                   % {"cls": type(self).__name__})  # pragma: nocover
 
     def get_table_pagination(self):
         """

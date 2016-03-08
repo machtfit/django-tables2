@@ -1,8 +1,9 @@
 # coding: utf-8
-from .utils import A, getargspec
+import six
 from django.db import models
 from django.db.models.fields import FieldDoesNotExist
-import six
+
+from .utils import A, getargspec
 
 
 class BoundRow(object):
@@ -26,7 +27,7 @@ class BoundRow(object):
         >>> table = SimpleTable([{'a': 1, 'b': 2}])
         >>> row = table.rows[0]  # we only have one row, so let's use it
         >>> for cell in row:
-        ...     print cell
+        ...     print(cell)
         ...
         1
         <input type="checkbox" name="my_chkbox" value="2" />
@@ -126,12 +127,12 @@ class BoundRow(object):
             return bound_column.default
 
         available = {
-            'value':        value,
-            'record':       self.record,
-            'column':       bound_column.column,
+            'value': value,
+            'record': self.record,
+            'column': bound_column.column,
             'bound_column': bound_column,
-            'bound_row':    self,
-            'table':        self._table,
+            'bound_row': self,
+            'table': self._table,
         }
         expected = {}
 
@@ -150,7 +151,7 @@ class BoundRow(object):
     def __contains__(self, item):
         """Check by both row object and column name."""
         if isinstance(item, six.string_types):
-            return item in self.table._columns
+            return item in self.table.columns
         else:
             return item in self
 

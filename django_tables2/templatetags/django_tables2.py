@@ -1,20 +1,22 @@
 # coding: utf-8
 from __future__ import absolute_import, unicode_literals
+
+import re
+from collections import OrderedDict
+
+import six
 from django import template
 from django.core.exceptions import ImproperlyConfigured
-from django.template import TemplateSyntaxError, Variable, Node
+from django.template import Node, TemplateSyntaxError
+from django.template.defaultfilters import title as old_title
+from django.template.defaultfilters import stringfilter
 from django.template.loader import get_template, select_template
-from django.template.defaultfilters import stringfilter, title as old_title
-from django.utils.http import urlencode
+from django.templatetags.l10n import register as l10n_register
 from django.utils.html import escape
-from django.utils.safestring import mark_safe
+from django.utils.http import urlencode
+
 import django_tables2 as tables
 from django_tables2.config import RequestConfig
-from collections import OrderedDict
-import re
-import six
-import tokenize
-
 
 register = template.Library()
 kwarg_re = re.compile(r"(?:(.+)=)?(.+)")
@@ -46,59 +48,6 @@ def token_kwargs(bits, parser):
     return kwargs
 
 
-class SetUrlParamNode(Node):
-    def __init__(self, changes):
-        super(SetUrlParamNode, self).__init__()
-        self.changes = changes
-
-    def render(self, context):
-        if not 'request' in context:
-            raise ImproperlyConfigured(context_processor_error_msg
-                                       % 'set_url_param')
-        params = dict(context['request'].GET)
-        for key, newvalue in self.changes.items():
-            newvalue = newvalue.resolve(context)
-            if newvalue == '' or newvalue is None:
-                params.pop(key, False)
-            else:
-                params[key] = six.text_type(newvalue)
-        return "?" + urlencode(params, doseq=True)
-
-
-@register.tag
-def set_url_param(parser, token):
-    """
-    Creates a URL (containing only the querystring [including "?"]) based on
-    the current URL, but updated with the provided keyword arguments.
-
-    Example::
-
-        {% set_url_param name="help" age=20 %}
-        ?name=help&age=20
-
-    **Deprecated** as of 0.7.0, use `querystring`.
-    """
-    bits = token.contents.split()
-    qschanges = {}
-    for i in bits[1:]:
-        try:
-            key, value = i.split('=', 1)
-            key = key.strip()
-            value = value.strip()
-            key_line_iter = six.StringIO(key).readline
-            keys = list(tokenize.generate_tokens(key_line_iter))
-            if keys[0][0] == tokenize.NAME:
-                # workaround bug #5270
-                value = Variable(value) if value == '""' else parser.compile_filter(value)
-                qschanges[str(key)] = value
-            else:
-                raise ValueError
-        except ValueError:
-            raise TemplateSyntaxError("Argument syntax wrong: should be"
-                                      "key=value")
-    return SetUrlParamNode(qschanges)
-
-
 class QuerystringNode(Node):
     def __init__(self, updates, removals):
         super(QuerystringNode, self).__init__()
@@ -106,9 +55,9 @@ class QuerystringNode(Node):
         self.removals = removals
 
     def render(self, context):
-        if not 'request' in context:
-            raise ImproperlyConfigured(context_processor_error_msg
-                                       % 'querystring')
+        if 'request' not in context:
+            raise ImproperlyConfigured(context_processor_error_msg % 'querystring')
+
         params = dict(context['request'].GET)
         for key, value in self.updates.items():
             key = key.resolve(context)
@@ -203,10 +152,11 @@ class RenderTableNode(Node):
             # achieved is to temporarily attach the context to the table,
             # which TemplateColumn then looks for and uses.
             table.context = context
-            return template.render(context)
+            return template.render(context.flatten())
         finally:
             del table.context
             context.pop()
+
 
 @register.tag
 def render_table(parser, token):
@@ -239,28 +189,13 @@ def render_table(parser, token):
     """
     bits = token.split_contents()
     try:
-        tag, table = bits.pop(0), parser.compile_filter(bits.pop(0))
+        bits.pop(0)
+        table = parser.compile_filter(bits.pop(0))
     except ValueError:
-        raise TemplateSyntaxError("'%s' must be given a table or queryset."
-                                  % bits[0])
+        raise TemplateSyntaxError("'%s' must be given a table or queryset." % bits[0])
+
     template = parser.compile_filter(bits.pop(0)) if bits else None
     return RenderTableNode(table, template)
-
-
-class NoSpacelessNode(Node):
-    def __init__(self, nodelist):
-        self.nodelist = nodelist
-        super(NoSpacelessNode, self).__init__()
-
-    def render(self, context):
-        return mark_safe(re.sub(r'>\s+<', '>&#32;<',
-                                self.nodelist.render(context)))
-
-@register.tag
-def nospaceless(parser, token):
-    nodelist = parser.parse(('endnospaceless',))
-    parser.delete_first_token()
-    return NoSpacelessNode(nodelist)
 
 
 RE_UPPERCASE = re.compile('[A-Z]')
@@ -280,17 +215,5 @@ def title(value):
     return re.sub('(\S+)', lambda m: title_word(m.group(0)), value)
 title.is_safe = True
 
-
-# Django 1.2 doesn't include the l10n template tag library (and it's non-
-# trivial to implement) so for Django 1.2 the localize functionality is
-# disabled.
-try:
-    from django.templatetags.l10n import register as l10n_register
-except ImportError:
-    localize = unlocalize = lambda x: x  # no-op
-else:
-    localize = l10n_register.filters['localize']
-    unlocalize = l10n_register.filters['unlocalize']
-
-register.filter('localize', localize)
-register.filter('unlocalize', unlocalize)
+register.filter('localize', l10n_register.filters['localize'])
+register.filter('unlocalize', l10n_register.filters['unlocalize'])

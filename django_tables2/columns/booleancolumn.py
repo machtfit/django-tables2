@@ -1,11 +1,13 @@
 # coding: utf-8
 from __future__ import absolute_import, unicode_literals
-from .base import Column, library
-from django.db import models
-from django.utils.html import escape
-from django.utils.safestring import mark_safe
-from django_tables2.utils import AttributeDict
+
 import six
+from django.db import models
+from django.utils.html import escape, format_html
+
+from django_tables2.utils import Accessor, AttributeDict
+
+from .base import Column, library
 
 
 @library.register
@@ -30,16 +32,32 @@ class BooleanColumn(Column):
         self.yesno = (yesno.split(',') if isinstance(yesno, six.string_types)
                       else tuple(yesno))
         if null:
-            kwargs["empty_values"] = ()
+            kwargs['empty_values'] = ()
         super(BooleanColumn, self).__init__(**kwargs)
 
-    def render(self, value):
+    def render(self, value, record, bound_column):
+        # if record is a model, we need to check if it has choices defined.
+        # If that's the case, we need to inverse lookup the value to convert to
+        # a boolean.
+        if hasattr(record, '_meta'):
+            try:
+                field = bound_column.accessor.get_field(record)
+
+                if hasattr(field, 'choices') and field.choices is not None:
+                    value = next(val for val, name in field.choices if name == value)
+            except:
+                pass
+
         value = bool(value)
         text = self.yesno[int(not value)]
-        html = '<span %s>%s</span>'
-        attrs = {"class": six.text_type(value).lower()}
-        attrs.update(self.attrs.get("span", {}))
-        return mark_safe(html % (AttributeDict(attrs).as_html(), escape(text)))
+        attrs = {'class': six.text_type(value).lower()}
+        attrs.update(self.attrs.get('span', {}))
+
+        return format_html(
+            '<span {}>{}</span>',
+            AttributeDict(attrs).as_html(),
+            escape(text)
+        )
 
     @classmethod
     def from_field(cls, field):

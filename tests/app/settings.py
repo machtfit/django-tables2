@@ -1,6 +1,6 @@
-from django.conf import global_settings
 import six
-
+from django import VERSION
+from django.conf import global_settings
 
 DATABASES = {
     'default': {
@@ -11,6 +11,8 @@ DATABASES = {
 
 INSTALLED_APPS = [
     'tests.app',
+    'django.contrib.contenttypes',
+    'django.contrib.auth',
     'django_tables2',
 ]
 
@@ -18,9 +20,22 @@ ROOT_URLCONF = 'tests.app.urls'
 
 SECRET_KEY = "this is super secret"
 
-TEMPLATE_CONTEXT_PROCESSORS = [
-    'django.core.context_processors.request'
-] + list(global_settings.TEMPLATE_CONTEXT_PROCESSORS)
+if VERSION < (1, 8):
+    TEMPLATE_CONTEXT_PROCESSORS = [
+        'django.core.context_processors.request'
+    ] + list(global_settings.TEMPLATE_CONTEXT_PROCESSORS)
+else:
+    TEMPLATES = [
+        {
+            'BACKEND': 'django.template.backends.django.DjangoTemplates',
+            'APP_DIRS': True,
+            'OPTIONS': {
+                'context_processors': [
+                    'django.template.context_processors.request'
+                ],
+            }
+        }
+    ]
 
 TIME_ZONE = "Australia/Brisbane"
 

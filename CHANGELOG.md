@@ -1,73 +1,51 @@
-django-tables2 - An app for creating HTML tables
-================================================
+# Change log
 
-[![Build status](https://travis-ci.org/bradleyayers/django-tables2.svg)](https://travis-ci.org/bradleyayers/django-tables2)
+## unreleased
+- Drop support for Django 1.7
 
-django-tables2 simplifies the task of turning sets of data into HTML tables. It
-has native support for pagination and sorting. It does for HTML tables what
-`django.forms` does for HTML forms. e.g.
+## v1.1.2 (2016-02-16)
+- Fix `BooleanColumn` with choices set will always render as if `True` (#301)
+- Fix a bug with `TemplateColumn` while using cached template loader (#75)
 
-![An example table rendered using django-tables2](http://dl.dropbox.com/u/33499139/django-tables2/example.png)
+## v1.1.1 (2016-01-26)
+- Allow Meta.fields to be a list as well as a tuple (#250)
+- Call template.render with a dict in Django >= 1.8. (#298)
+- Added `RelatedLinkColumn()` to render links to related objects (#297)
+- Remove default value from request param to table.as_html()
 
-Its features include:
+## v1.1.0 (2016-01-19)
+- Add tests for `TimeColumn`
+- Remove `sortable` argument for `Table` and Column constructors and its associated methods. Deprecated since 2012.
+- Remove deprecated aliases for `attrs` in `CheckboxColumn`.
+- Remove deprecated `OrderByTuple` `cmp` method (deprecated since 2013).
+- Add bootstrap template and (#293, fixes #141, #285)
+- Fix different html for tables with and without pagination (#293, fixes #149, #285)
+- Remove `{% nospaceless %}` template tag and remove wrapping template in `{% spaceless %}` **Possible breaking change**, if you use custom templates.
 
-- Any iterable can be a data-source, but special support for Django querysets
-  is included.
-- The builtin UI does not rely on JavaScript.
-- Support for automatic table generation based on a Django model.
-- Supports custom column functionality via subclassing.
-- Pagination.
-- Column based table sorting.
-- Template tag to enable trivial rendering to HTML.
-- Generic view mixin.
+## v1.0.7 (2016-01-03)
+- Explicitly check if `column.verbose_name` is not None to support empty column headers (fixes #280)
+- Cleanup the example project to make it work with modern Django versions.
+- Do not sort queryset when orderable=False (#204 by [@bmihelac](https://github.com/bmihelac))
+- `show_header` attribute on `Table` allows disabling the header (#175 by [@kviktor](https://github.com/kviktor))
+- `LinkColumn` now tries to call `get_absolute_url` on a record if no `viewname` is provided (#283, fixes #231).
+- Add `request` argument to `Table.as_html()` to allow passing correct request objects instead of poorly generated ones #282
+- Add coverage reporting to build #282
+- Drop support for python 3.2 (because of coverage), support ends feb 2016 #282
+- move `build_request` from `django_table2.utils` to `tests.utils` and amend tests #282
 
-Creating a table is as simple as:
+## v1.0.6 (2015-12-29)
+- Support for custom text value in LinkColumn (#277 by [@toudi](https://github.com/toudi))
+- Refactor LinkColumn.render_link() to not escape twice #279
+- Removed `Attrs` (wrapper for dict), deprecated on 2012-09-18
+- Convert README.md to rst in setup.py to make PyPI look nice (fixes #97)
 
-    import django_tables2 as tables
+## v1.0.5 (2015-12-17)
+- First version released by new maintainer [@jieter](https://github.com/jieter)
+- Dropped support for django 1.5 and 1.6, add python 3.5 with django 1.8 and 1.9 to the build matrix (#273)
+- Prevent `SingleTableView` from calling `get_queryset` twice. (fixes #155)
+- Don't call managers when resolving accessors. (#214 by [@mbertheau](https://github.com/mbertheau), fixes #211)
 
-    class SimpleTable(tables.Table):
-        class Meta:
-            model = Simple
-
-This would then be used in a view:
-
-    def simple_list(request):
-        queryset = Simple.objects.all()
-        table = SimpleTable(queryset)
-        return render_to_response("simple_list.html", {"table": table},
-                                  context_instance=RequestContext(request))
-
-And finally in the template:
-
-    {% load django_tables2 %}
-    {% render_table table %}
-
-This example shows one of the simplest cases, but django-tables2 can do a lot
-more! Check out the [documentation](http://django-tables2.readthedocs.org/en/latest/) for more details.
-
-
-Building the documentation
-==========================
-
-If you want to build the docs from within a virtualenv, and Sphinx is installed
-globally, use:
-
-    make html SPHINXBUILD="python $(which sphinx-build)"
-
-
-Publishing a release
-====================
-
-1. Bump the version in `django-tables2/__init__.py`.
-2. Update `README.rst`.
-3. Run `python setup.py sdist upload --sign --identity=<your gpg identity>`.
-
-Change log
-==========
-
-v1.0.4
-------
-
+## v1.0.4 (2015-05-09)
 - Fix bug in retrieving `field.verbose_name` under Django 1.8.
 
 v1.0.3

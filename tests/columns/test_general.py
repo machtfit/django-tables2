@@ -2,13 +2,16 @@
 # pylint: disable=R0912,E0102
 from __future__ import unicode_literals
 
-from django.utils.translation import ugettext_lazy
-from django.utils.safestring import mark_safe, SafeData
 import pytest
+from django.utils.safestring import SafeData, mark_safe
+from django.utils.translation import ugettext_lazy
 
 import django_tables2 as tables
+
 from ..app.models import Person
-from ..utils import parse, warns
+from ..utils import build_request, parse
+
+request = build_request('/')
 
 
 def test_column_render_supports_kwargs():
@@ -44,12 +47,32 @@ def test_should_support_safe_verbose_name():
     assert isinstance(table.columns["safe"].header, SafeData)
 
 
+def test_should_raise_on_invalid_accessor():
+    with pytest.raises(TypeError):
+        class SimpleTable(tables.Table):
+            column = tables.Column(accessor={})
+
+
+def test_column_with_callable_accessor_should_not_have_default():
+    with pytest.raises(TypeError):
+        class SimpleTable(tables.Table):
+            column = tables.Column(accessor=lambda: 'foo', default='')
+
+
 def test_should_support_safe_verbose_name_via_model():
     class PersonTable(tables.Table):
         safe = tables.Column()
 
     table = PersonTable(Person.objects.all())
     assert isinstance(table.columns["safe"].header, SafeData)
+
+
+def test_should_support_empty_string_as_explicit_verbose_name():
+    class SimpleTable(tables.Table):
+        acronym = tables.Column(verbose_name="")
+
+    table = SimpleTable([])
+    assert table.columns["acronym"].header == ""
 
 
 @pytest.mark.django_db
@@ -61,39 +84,6 @@ def test_handle_verbose_name_of_many2onerel():
     Person.objects.create(first_name='bradley', last_name='ayers')
     table = Table(Person.objects.all())
     assert table.columns['count'].verbose_name == 'Information'
-
-
-def test_sortable_backwards_compatibility():
-    # Table.Meta.sortable (not set)
-    class SimpleTable(tables.Table):
-        name = tables.Column()
-    table = SimpleTable([])
-    with warns(DeprecationWarning):
-        assert table.columns['name'].sortable is True
-
-    # Table.Meta.sortable = False
-    with warns(DeprecationWarning):
-        class SimpleTable(tables.Table):
-            name = tables.Column()
-
-            class Meta:
-                sortable = False
-    table = SimpleTable([])
-    with warns(DeprecationWarning):
-        assert table.columns['name'].sortable is False  # backwards compatible
-    assert table.columns['name'].orderable is False
-
-    # Table.Meta.sortable = True
-    with warns(DeprecationWarning):
-        class SimpleTable(tables.Table):
-            name = tables.Column()
-
-            class Meta:
-                sortable = True
-    table = SimpleTable([])
-    with warns(DeprecationWarning):
-        assert table.columns['name'].sortable is True  # backwards compatible
-    assert table.columns['name'].orderable is True
 
 
 def test_orderable():
@@ -112,9 +102,6 @@ def test_orderable():
     table = SimpleTable([])
     assert table.columns['name'].orderable is False
 
-    with warns(DeprecationWarning):
-        assert table.columns['name'].sortable is False  # backwards compatible
-
     # Table.Meta.orderable = True
     class SimpleTable(tables.Table):
         name = tables.Column()
@@ -122,8 +109,6 @@ def test_orderable():
         class Meta:
             orderable = True
     table = SimpleTable([])
-    with warns(DeprecationWarning):
-        assert table.columns['name'].sortable is True  # backwards compatible
     assert table.columns['name'].orderable is True
 
 
@@ -265,7 +250,7 @@ def test_should_support_both_meta_sequence_and_constructor_exclude():
             sequence = ('a', '...')
 
     table = SequencedTable([], exclude=('c', ))
-    table.as_html()
+    table.as_html(request)
 
 
 def test_bound_columns_should_support_indexing():
@@ -284,9 +269,9 @@ def test_cell_attrs_applies_to_td_and_th():
 
     # providing data ensures 1 row is rendered
     table = SimpleTable([{"a": "value"}])
-    root = parse(table.as_html())
+    root = parse(table.as_html(request))
 
-    assert root.findall('.//thead/tr/th')[0].attrib == {"key": "value", "class": "a orderable sortable"}
+    assert root.findall('.//thead/tr/th')[0].attrib == {"key": "value", "class": "a orderable"}
     assert root.findall('.//tbody/tr/td')[0].attrib == {"key": "value", "class": "a"}
 
 
@@ -295,30 +280,30 @@ def test_cells_are_automatically_given_column_name_as_class():
         a = tables.Column()
 
     table = SimpleTable([{"a": "value"}])
-    root = parse(table.as_html())
-    assert root.findall('.//thead/tr/th')[0].attrib == {"class": "a orderable sortable"}
+    root = parse(table.as_html(request))
+    assert root.findall('.//thead/tr/th')[0].attrib == {"class": "a orderable"}
     assert root.findall('.//tbody/tr/td')[0].attrib == {"class": "a"}
 
 
-def test_th_are_given_sortable_class_if_column_is_orderable():
+def test_th_are_given_orderable_class_if_column_is_orderable():
     class SimpleTable(tables.Table):
         a = tables.Column()
         b = tables.Column(orderable=False)
 
     table = SimpleTable([{"a": "value"}])
-    root = parse(table.as_html())
+    root = parse(table.as_html(request))
     # return classes of an element as a set
     classes = lambda x: set(x.attrib["class"].split())
-    assert "sortable" in classes(root.findall('.//thead/tr/th')[0])
-    assert "sortable" not in classes(root.findall('.//thead/tr/th')[1])
+    assert "orderable" in classes(root.findall('.//thead/tr/th')[0])
+    assert "orderable" not in classes(root.findall('.//thead/tr/th')[1])
 
     # Now try with an ordered table
     table = SimpleTable([], order_by="a")
-    root = parse(table.as_html())
+    root = parse(table.as_html(request))
     # return classes of an element as a set
-    assert "sortable" in classes(root.findall('.//thead/tr/th')[0])
+    assert "orderable" in classes(root.findall('.//thead/tr/th')[0])
     assert "asc" in classes(root.findall('.//thead/tr/th')[0])
-    assert "sortable" not in classes(root.findall('.//thead/tr/th')[1])
+    assert "orderable" not in classes(root.findall('.//thead/tr/th')[1])
 
 
 def test_empty_values_triggers_default():
@@ -327,3 +312,28 @@ def test_empty_values_triggers_default():
 
     table = Table([{"a": 1}, {"a": 2}, {"a": 3}, {"a": 4}])
     assert [x["a"] for x in table.rows] == ["--", "--", 3, 4]
+
+
+def test_register_skips_non_columns():
+    from django_tables2.columns.base import library
+
+    @library.register
+    class Klass(object):
+        pass
+
+    class Table(tables.Table):
+        class Meta:
+            model = Person
+
+    Table([])
+
+
+def test_raises_when_using_non_supported_index():
+    class Table(tables.Table):
+        column = tables.Column()
+
+    table = Table([{'column': 'foo'}])
+
+    row = table.rows[0]
+    with pytest.raises(TypeError):
+        row[table]

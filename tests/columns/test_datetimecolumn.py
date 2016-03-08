@@ -1,8 +1,11 @@
 # coding: utf-8
 # pylint: disable=R0912,E0102
 from __future__ import unicode_literals
+
 from datetime import datetime
 
+import pytest
+import pytz
 from django.db import models
 
 import django_tables2 as tables
@@ -11,15 +14,14 @@ try:
     from django.utils import timezone
 except ImportError:
     timezone = None
-import pytz
-import pytest
 
-# Format string: https://docs.djangoproject.com/en/1.4/ref/templates/builtins/#date
+# Format string: https://docs.djangoproject.com/en/stable/ref/templates/builtins/#date
 # D -- Day of the week, textual, 3 letters  -- 'Fri'
 # b -- Month, textual, 3 letters, lowercase -- 'jan'
 # Y -- Year, 4 digits.                      -- '1999'
 # A -- 'AM' or 'PM'.                        -- 'AM'
 # f -- Time, in 12-hour hours[:minutes]     -- '1', '1:30'
+
 
 @pytest.yield_fixture
 def dt():
@@ -73,6 +75,9 @@ def test_should_handle_short_format(dt, settings):
 def test_should_be_used_for_datetimefields():
     class DateTimeModel(models.Model):
         field = models.DateTimeField()
+
+        class Meta:
+            app_label = 'django_tables2_test'
 
     class Table(tables.Table):
         class Meta:
